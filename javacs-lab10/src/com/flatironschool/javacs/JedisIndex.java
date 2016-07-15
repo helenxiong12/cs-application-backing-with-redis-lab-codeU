@@ -59,6 +59,16 @@ public class JedisIndex {
 		String redisKey = termCounterKey(url);
 		return jedis.exists(redisKey);
 	}
+
+	 /**
+     * Adds a URL to the set associated with `term`.
+     FILL IN
+     **/
+    public void add(String term, TermCounter tc) {
+		/*if (tc.get(term) == null) {
+			tc.add(term);
+		}*/
+    }
 	
 	/**
 	 * Looks up a search term and returns a set of URLs.
@@ -67,8 +77,8 @@ public class JedisIndex {
 	 * @return Set of URLs.
 	 */
 	public Set<String> getURLs(String term) {
-        // FILL THIS IN!
-		return null;
+        Set<String> set = jedis.smembers(urlSetKey(term));
+        return set;
 	}
 
     /**
@@ -78,8 +88,13 @@ public class JedisIndex {
 	 * @return Map from URL to count.
 	 */
 	public Map<String, Integer> getCounts(String term) {
-        // FILL THIS IN!
-		return null;
+        Map<String, Integer> map = new HashMap<String, Integer>();
+        Set<String> urls = getURLs(term);
+        for (String url: urls) {
+            Integer count = getCount(url, term);
+            map.put(url, count);
+        }
+        return map;
 	}
 
     /**
@@ -90,9 +105,29 @@ public class JedisIndex {
 	 * @return
 	 */
 	public Integer getCount(String url, String term) {
-        // FILL THIS IN!
-		return null;
+        String redisKey = termCounterKey(url);
+        String count = jedis.hget(redisKey, term);
+        return new Integer(count);
 	}
+
+	 /**
+     * Pushes the contents of the TermCounter to Redis.
+     */
+    public List<Object> pushTermCounterToRedis(TermCounter tc) {
+    	Transaction t = jedis.multi();
+
+    	String url = tc.getLabel();
+    	String hashname = termCounterKey(url);
+    	t.del(hashname);
+
+    	for (String term: tc.keySet()) {
+    		Integer count = tc.get(term);
+    		t.hset(hashname, term, count.toString());
+    		t.sadd(urlSetKey(term), url);
+    	}
+
+    	return t.exec();
+    }
 
 
 	/**
@@ -102,7 +137,12 @@ public class JedisIndex {
 	 * @param paragraphs  Collection of elements that should be indexed.
 	 */
 	public void indexPage(String url, Elements paragraphs) {
-        // FILL THIS IN!
+        // Create a term counter and process the URL
+        TermCounter tc = new TermCounter(url);
+        tc.processElements(paragraphs);
+
+        //push term counter to redis
+        pushTermCounterToRedis(tc);
 	}
 
 	/**
